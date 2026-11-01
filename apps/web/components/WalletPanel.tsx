@@ -38,6 +38,7 @@ export default function WalletPanel() {
   const [amount, setAmount] = useState('');
   const [reviewing, setReviewing] = useState(false);
   const [localError, setLocalError] = useState('');
+  const [submittedChainId, setSubmittedChainId] = useState<number | null>(null);
 
   function reviewTransfer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -80,8 +81,9 @@ export default function WalletPanel() {
       await sendTransactionAsync({
         to: recipient.trim() as `0x${string}`,
         value,
-        chainId,
+        chainId: supportedNetwork.id,
       });
+      setSubmittedChainId(supportedNetwork.id);
       setReviewing(false);
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : 'The wallet did not submit the transaction.');
@@ -188,7 +190,7 @@ export default function WalletPanel() {
               <div className="notice" aria-live="polite">
                 <p><strong>Transaction submitted.</strong> {confirming ? 'Waiting for network confirmation…' : confirmed ? 'Confirmed on-chain.' : 'Confirmation status is pending or unavailable.'}</p>
                 <p className="hint">Transaction hash: {transactionHash}</p>
-                {supportedNetwork ? <a href={supportedNetwork.explorer + transactionHash} target="_blank" rel="noreferrer">View transaction on {supportedNetwork.name} explorer</a> : null}
+                {networks.find((network) => network.id === submittedChainId) ? <a href={networks.find((network) => network.id === submittedChainId)!.explorer + transactionHash} target="_blank" rel="noreferrer">View transaction on {networks.find((network) => network.id === submittedChainId)!.name} explorer</a> : null}
               </div>
             ) : null}
           </div>
