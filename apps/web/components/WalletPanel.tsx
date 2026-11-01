@@ -2,8 +2,14 @@
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useBalance, useSendTransaction, useSwitchChain, useWaitForTransactionReceipt } from 'wagmi';
-import { formatEther, isAddress, parseEther } from 'viem';
+import { formatEther, isAddress, parseEther, type Address } from 'viem';
 import { useState, type FormEvent } from 'react';
+
+const LINK_TOKEN_ADDRESSES: Record<number, Address> = {
+  1: '0x514910771AF9Ca656af840dff83E8264EcF986CA',
+  8453: '0x88Fb150BDc53A65fe94Dea0c9BA0a6dAf8C6e196',
+  56: '0x404460C6A5EdE2D891e8297795264fDe62ADBB75',
+};
 
 const networks = [
   { id: 1, name: 'Ethereum Mainnet', symbol: 'ETH', explorer: 'https://etherscan.io/tx/' },
@@ -17,6 +23,13 @@ export default function WalletPanel() {
   const { data: balance, isLoading: balanceLoading, error: balanceError } = useBalance({
     address,
     query: { enabled: Boolean(address && supportedNetwork) },
+  });
+  const linkTokenAddress = chainId ? LINK_TOKEN_ADDRESSES[chainId] : undefined;
+  const { data: linkBalance, isLoading: linkBalanceLoading, error: linkBalanceError } = useBalance({
+    address,
+    token: linkTokenAddress,
+    chainId,
+    query: { enabled: Boolean(address && supportedNetwork && linkTokenAddress) },
   });
   const { switchChain, isPending: switching } = useSwitchChain();
   const {
@@ -123,6 +136,13 @@ export default function WalletPanel() {
                 {!supportedNetwork ? 'Switch to a supported network' : balanceLoading ? 'Loading…' : balanceError ? 'Unavailable' : balance ? `${formatEther(balance.value)} ${supportedNetwork.symbol}` : 'Unavailable'}
               </strong>
             </div>
+            <div>
+              <span className="hint">LINK balance (Mainnet)</span>
+              <strong>
+                {!supportedNetwork ? 'Switch to a supported network' : linkBalanceLoading ? 'Loading…' : linkBalanceError ? 'Unavailable' : linkBalance ? `${formatEther(linkBalance.value)} LINK` : '0 LINK'}
+              </strong>
+              <span className="hint">Live token balance on {supportedNetwork?.name ?? 'the selected network'}</span>
+            </div>
           </div>
 
           <div className="network-switches" aria-label="Supported networks">
@@ -142,7 +162,7 @@ export default function WalletPanel() {
 
           <div className="transfer-box">
             <h3>Send native coin</h3>
-            <p className="hint">Only ETH on Ethereum/Base or BNB on BNB Smart Chain is supported here. This form does not send tokens or run automatic transfers.</p>
+            <p className="hint">Only ETH on Ethereum/Base or BNB on BNB Smart Chain is supported here. LINK is displayed as a read-only token balance; this form does not send tokens or run automatic transfers.</p>
 
             {!reviewing ? (
               <form onSubmit={reviewTransfer}>
