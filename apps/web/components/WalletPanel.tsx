@@ -37,6 +37,7 @@ export default function WalletPanel() {
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [reviewing, setReviewing] = useState(false);
+  const [reviewedChainId, setReviewedChainId] = useState<number | null>(null);
   const [localError, setLocalError] = useState('');
   const [submittedChainId, setSubmittedChainId] = useState<number | null>(null);
 
@@ -59,6 +60,7 @@ export default function WalletPanel() {
 
     try {
       parseEther(amount.trim());
+      setReviewedChainId(chainId);
       setReviewing(true);
     } catch {
       setLocalError('The amount is not a valid native-coin value.');
@@ -67,23 +69,27 @@ export default function WalletPanel() {
 
   async function submitTransfer() {
     setLocalError('');
-    if (!supportedNetwork || !chainId || !isAddress(recipient.trim())) {
-      setLocalError('The network or destination address is not valid.');
+    if (!supportedNetwork || !chainId || !reviewedChainId || chainId !== reviewedChainId || !isAddress(recipient.trim())) {
+      setLocalError('The active network changed or the destination is invalid. Cancel and review the transfer again.');
       return;
     }
 
     try {
       const value = parseEther(amount.trim());
-      if (balance?.value !== undefined && value > balance.value) {
+      if (!balance) {
+        setLocalError('Wait for the connected wallet balance to load before sending.');
+        return;
+      }
+      if (value > balance.value) {
         setLocalError('The amount exceeds the displayed balance. Keep extra funds available for network fees.');
         return;
       }
       await sendTransactionAsync({
         to: recipient.trim() as `0x${string}`,
         value,
-        chainId: supportedNetwork.id,
+        chainId: reviewedChainId,
       });
-      setSubmittedChainId(supportedNetwork.id);
+      setSubmittedChainId(reviewedChainId);
       setReviewing(false);
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : 'The wallet did not submit the transaction.');
@@ -169,7 +175,7 @@ export default function WalletPanel() {
             ) : (
               <div className="transfer-review">
                 <h4>Review before wallet approval</h4>
-                <p><strong>Network:</strong> {supportedNetwork?.name}</p>
+                <p><strong>Network:</strong> {networks.find((network) => network.id === reviewedChainId)?.name ?? 'Unknown network'}</p>
                 <p><strong>From:</strong> {address}</p>
                 <p><strong>To:</strong> {recipient}</p>
                 <p><strong>Amount:</strong> {amount} {supportedNetwork?.symbol}</p>
