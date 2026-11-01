@@ -87,9 +87,9 @@ export default function WalletPanel() {
       await sendTransactionAsync({
         to: recipient.trim() as `0x${string}`,
         value,
-        chainId: reviewedChainId,
+        chainId: supportedNetwork.id,
       });
-      setSubmittedChainId(reviewedChainId);
+      setSubmittedChainId(supportedNetwork.id);
       setReviewing(false);
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : 'The wallet did not submit the transaction.');
