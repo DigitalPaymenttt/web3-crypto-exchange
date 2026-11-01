@@ -63,6 +63,7 @@ export default function WalletPanel() {
   const [linkReviewing, setLinkReviewing] = useState(false);
   const [reviewedLinkChainId, setReviewedLinkChainId] = useState<number | null>(null);
   const [linkLocalError, setLinkLocalError] = useState('');
+  const [submittedLinkChainId, setSubmittedLinkChainId] = useState<number | null>(null);
 
   function reviewTransfer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -101,7 +102,7 @@ export default function WalletPanel() {
       setLinkLocalError('Enter a valid destination address.');
       return;
     }
-    if (!/^(?:0|[1-9]\\d*)(?:\\.\\d{1,18})?$/.test(linkAmount.trim()) || Number(linkAmount) <= 0) {
+    if (!/^(?:0|[1-9]\d*)(?:\.\d{1,18})?$/.test(linkAmount.trim()) || Number(linkAmount) <= 0) {
       setLinkLocalError('Enter a positive LINK amount with no more than 18 decimal places.');
       return;
     }
@@ -137,6 +138,7 @@ export default function WalletPanel() {
         args: [linkRecipient.trim() as Address, value],
         chainId: supportedNetwork.id,
       });
+      setSubmittedLinkChainId(supportedNetwork.id);
       setLinkReviewing(false);
     } catch (error) {
       setLinkLocalError(error instanceof Error ? error.message : 'The wallet did not submit the LINK transfer.');
@@ -240,7 +242,7 @@ export default function WalletPanel() {
             {linkTransactionHash ? <div className="notice" aria-live="polite">
               <p><strong>LINK transaction submitted.</strong> {linkConfirming ? 'Waiting for network confirmation…' : linkConfirmed ? 'Confirmed on-chain.' : 'Confirmation status is pending or unavailable.'}</p>
               <p className="hint">Transaction hash: {linkTransactionHash}</p>
-              {supportedNetwork ? <a href={networks.find((network) => network.id === supportedNetwork.id)!.explorer + linkTransactionHash} target="_blank" rel="noreferrer">View LINK transfer on {supportedNetwork.name} explorer</a> : null}
+              {networks.find((network) => network.id === submittedLinkChainId) ? <a href={networks.find((network) => network.id === submittedLinkChainId)!.explorer + linkTransactionHash} target="_blank" rel="noreferrer">View LINK transfer on {networks.find((network) => network.id === submittedLinkChainId)!.name} explorer</a> : null}
             </div> : null}
           </div>
 
