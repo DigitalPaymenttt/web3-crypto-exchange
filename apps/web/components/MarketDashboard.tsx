@@ -51,7 +51,7 @@ export default function MarketDashboard() {
     <div className="section-heading">
       <div>
         <h2>Live market data &amp; trending pools</h2>
-        <p className="muted">CoinGecko market prices and GeckoTerminal on-chain pool analytics. Read-only.</p>
+        <p className="muted">CoinGecko market prices, GeckoTerminal trending pools, and BNB Chain DEX analytics. Read-only.</p>
       </div>
       <button className="secondary-button" type="button" onClick={() => void refresh()} disabled={loading}>
         {loading ? 'Refreshing…' : 'Refresh data'}
@@ -75,7 +75,7 @@ export default function MarketDashboard() {
         </article>)}
       </div> : <p className="hint">No market prices returned. Confirm server-side CoinGecko credentials and plan access.</p>}
 
-      <h3 className="subsection-heading">Trending pools across networks</h3>
+      <h3 className="subsection-heading">Trending pools across networks, including BNB Chain</h3>
       {data.pools.length ? <div className="table-wrap"><table>
         <thead><tr><th>Pool</th><th>Network / DEX</th><th>24h change</th><th>24h volume</th><th>Liquidity reserve</th><th>Pool address</th></tr></thead>
         <tbody>{data.pools.map((pool) => <tr key={pool.id}>
