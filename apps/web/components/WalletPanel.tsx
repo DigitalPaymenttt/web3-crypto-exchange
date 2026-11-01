@@ -1,8 +1,8 @@
 'use client';
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useBalance, useSendTransaction, useSwitchChain, useWaitForTransactionReceipt } from 'wagmi';
-import { formatEther, isAddress, parseEther, type Address } from 'viem';
+import { useAccount, useBalance, useSendTransaction, useSwitchChain, useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
+import { erc20Abi, formatEther, isAddress, parseEther, parseUnits, type Address } from 'viem';
 import { useState, type FormEvent } from 'react';
 
 const LINK_TOKEN_ADDRESSES: Record<number, Address> = {
@@ -32,6 +32,11 @@ export default function WalletPanel() {
     query: { enabled: Boolean(address && supportedNetwork && linkTokenAddress) },
   });
   const { switchChain, isPending: switching } = useSwitchChain();
+  const { writeContractAsync, data: linkTransactionHash, isPending: linkWalletPending, error: linkWalletError } = useWriteContract();
+  const { isLoading: linkConfirming, isSuccess: linkConfirmed, error: linkConfirmationError } = useWaitForTransactionReceipt({
+    hash: linkTransactionHash,
+    query: { enabled: Boolean(linkTransactionHash) },
+  });
   const {
     sendTransactionAsync,
     data: transactionHash,
@@ -53,6 +58,11 @@ export default function WalletPanel() {
   const [reviewedChainId, setReviewedChainId] = useState<number | null>(null);
   const [localError, setLocalError] = useState('');
   const [submittedChainId, setSubmittedChainId] = useState<number | null>(null);
+  const [linkRecipient, setLinkRecipient] = useState('');
+  const [linkAmount, setLinkAmount] = useState('');
+  const [linkReviewing, setLinkReviewing] = useState(false);
+  const [reviewedLinkChainId, setReviewedLinkChainId] = useState<number | null>(null);
+  const [linkLocalError, setLinkLocalError] = useState('');
 
   function reviewTransfer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -77,6 +87,59 @@ export default function WalletPanel() {
       setReviewing(true);
     } catch {
       setLocalError('The amount is not a valid native-coin value.');
+    }
+  }
+
+  function reviewLinkTransfer(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLinkLocalError('');
+    if (!supportedNetwork || !chainId || !linkTokenAddress) {
+      setLinkLocalError('Switch to Ethereum, Base, or BNB Smart Chain before preparing a LINK transfer.');
+      return;
+    }
+    if (!isAddress(linkRecipient.trim())) {
+      setLinkLocalError('Enter a valid destination address.');
+      return;
+    }
+    if (!/^(?:0|[1-9]\\d*)(?:\\.\\d{1,18})?$/.test(linkAmount.trim()) || Number(linkAmount) <= 0) {
+      setLinkLocalError('Enter a positive LINK amount with no more than 18 decimal places.');
+      return;
+    }
+    try {
+      const value = parseUnits(linkAmount.trim(), 18);
+      if (!linkBalance || value > linkBalance.value) {
+        setLinkLocalError('The LINK amount exceeds the displayed balance or the balance has not loaded.');
+        return;
+      }
+      setReviewedLinkChainId(chainId);
+      setLinkReviewing(true);
+    } catch {
+      setLinkLocalError('Enter a valid LINK amount.');
+    }
+  }
+
+  async function submitLinkTransfer() {
+    setLinkLocalError('');
+    if (!supportedNetwork || !chainId || chainId !== reviewedLinkChainId || !linkTokenAddress || !isAddress(linkRecipient.trim())) {
+      setLinkLocalError('The active network changed or the recipient is invalid. Cancel and review again.');
+      return;
+    }
+    try {
+      const value = parseUnits(linkAmount.trim(), 18);
+      if (!linkBalance || value > linkBalance.value) {
+        setLinkLocalError('The LINK balance is insufficient. Refresh the balance and review again.');
+        return;
+      }
+      await writeContractAsync({
+        address: linkTokenAddress,
+        abi: erc20Abi,
+        functionName: 'transfer',
+        args: [linkRecipient.trim() as Address, value],
+        chainId: supportedNetwork.id,
+      });
+      setLinkReviewing(false);
+    } catch (error) {
+      setLinkLocalError(error instanceof Error ? error.message : 'The wallet did not submit the LINK transfer.');
     }
   }
 
@@ -143,6 +206,42 @@ export default function WalletPanel() {
               </strong>
               <span className="hint">Live token balance on {supportedNetwork?.name ?? 'the selected network'}</span>
             </div>
+          </div>
+
+          <div className="transfer-box">
+            <h3>Send LINK</h3>
+            <p className="hint">Mainnet ERC-20 transfer. You must hold LINK and have the network's native coin (ETH on Ethereum/Base or BNB on BNB Chain) for gas. Review the fee and transaction details in your wallet before signing.</p>
+            {!linkReviewing ? (
+              <form onSubmit={reviewLinkTransfer}>
+                <label htmlFor="link-recipient">LINK recipient address</label>
+                <input id="link-recipient" className="address-input" value={linkRecipient} onChange={(event) => setLinkRecipient(event.target.value)} placeholder="0x..." autoComplete="off" spellCheck={false} required />
+                <label htmlFor="link-amount">Amount (LINK)</label>
+                <input id="link-amount" className="address-input" value={linkAmount} onChange={(event) => setLinkAmount(event.target.value)} placeholder="1.0" inputMode="decimal" autoComplete="off" required />
+                <div className="actions"><button className="primary-button" type="submit" disabled={!supportedNetwork || !linkTokenAddress || linkBalanceLoading || !linkBalance || linkBalance.value === 0n}>Review LINK transfer</button></div>
+              </form>
+            ) : (
+              <div className="transfer-review">
+                <h4>Review LINK transfer</h4>
+                <p><strong>Network:</strong> {networks.find((network) => network.id === reviewedLinkChainId)?.name}</p>
+                <p><strong>Token contract:</strong> {linkTokenAddress}</p>
+                <p><strong>From:</strong> {address}</p>
+                <p><strong>To:</strong> {linkRecipient}</p>
+                <p><strong>Amount:</strong> {linkAmount} LINK</p>
+                <p className="hint">Only continue if the network, token contract, recipient, and amount are correct. Your wallet will show the network fee. Never approve an unexpected token allowance; this transfer calls LINK transfer directly.</p>
+                <div className="actions">
+                  <button className="primary-button" type="button" onClick={() => void submitLinkTransfer()} disabled={linkWalletPending || linkConfirming}>{linkWalletPending ? 'Waiting for wallet…' : 'Confirm and request wallet signature'}</button>
+                  <button className="secondary-button" type="button" onClick={() => setLinkReviewing(false)} disabled={linkWalletPending}>Cancel</button>
+                </div>
+              </div>
+            )}
+            {linkLocalError ? <div className="notice error" role="alert">{linkLocalError}</div> : null}
+            {linkWalletError ? <div className="notice error" role="alert">Wallet error: {linkWalletError.message}</div> : null}
+            {linkConfirmationError ? <div className="notice error" role="alert">Confirmation lookup failed. Check the transaction hash in the block explorer.</div> : null}
+            {linkTransactionHash ? <div className="notice" aria-live="polite">
+              <p><strong>LINK transaction submitted.</strong> {linkConfirming ? 'Waiting for network confirmation…' : linkConfirmed ? 'Confirmed on-chain.' : 'Confirmation status is pending or unavailable.'}</p>
+              <p className="hint">Transaction hash: {linkTransactionHash}</p>
+              {supportedNetwork ? <a href={networks.find((network) => network.id === supportedNetwork.id)!.explorer + linkTransactionHash} target="_blank" rel="noreferrer">View LINK transfer on {supportedNetwork.name} explorer</a> : null}
+            </div> : null}
           </div>
 
           <div className="network-switches" aria-label="Supported networks">
